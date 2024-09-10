@@ -33,3 +33,23 @@ This PowerShell script automates the process of onboarding Illumio CloudSecure t
 ## Usage
 
 ### Basic usage (creates new app):
+```
+### Using an existing app:
+```
+### Using a custom NSG role:
+```
+## NSG Role Assignment
+
+The script now supports flexible NSG role assignment:
+
+1. If `$nsgRoleId` is provided, it attempts to use the role with that ID.
+2. If `$nsgRoleName` is provided, it attempts to use the role with that name.
+3. If neither is provided or if the specified role is not found, it falls back to the default "Network Security Group Contributor" role.
+
+This allows for more granular control over the permissions granted to the Illumio CloudSecure application in Azure.
+
+## Notes
+
+- Ensure you have the necessary Azure PowerShell modules installed and are logged into your Azure account before running the script.
+- The script requires appropriate permissions in Azure to create/modify applications and assign roles.
+- Always review and test the script in a non-production environment before using it in production.
