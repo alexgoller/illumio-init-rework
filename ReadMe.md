@@ -33,11 +33,7 @@ This PowerShell script automates the process of onboarding Illumio CloudSecure t
 ## Usage
 
 ### Basic usage (creates new app):
-```
-### Using an existing app:
-```
-### Using a custom NSG role:
-```
+
 ## NSG Role Assignment
 
 The script now supports flexible NSG role assignment:
