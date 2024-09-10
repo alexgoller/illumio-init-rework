@@ -13,7 +13,9 @@ param(
     [switch]$remove, 
     [switch]$nsg,
     $existingAppId = "",  # New parameter for existing AppId
-    $existingAppSecret = ""  # New parameter for existing App Secret
+    $existingAppSecret = "",  # New parameter for existing App Secret
+    $nsgRoleId = "",  # New parameter for custom NSG role ID
+    $nsgRoleName = ""  # New parameter for custom NSG role name
 )
 
 # Input from user
@@ -28,7 +30,7 @@ $ErrorActionPreference = "Stop"
 
 New-Variable -Name DefaultAppName -Value "Illumio-CloudSecure-Access" -Option Constant
 New-Variable -Name RoleName -Value "Illumio Firewall Administrator" -Option Constant
-New-Variable -Name NSGRoleName -Value "Illumio Network Security Administrator" -Option Constant
+New-Variable -Name DefaultNSGRoleName -Value "Network Security Group Contributor" -Option Constant
 New-Variable -Name SubscriptionScopePrefix -Value "/subscriptions" -Option Constant
 New-Variable -Name TenantScopePrefix -Value "/providers/Microsoft.Management/managementGroups" -Option Constant
 New-Variable -Name ReaderRole -Value "Reader" -Option Constant
@@ -486,64 +488,33 @@ function Grant-Network-Access-to-App {
 
     try {
         if ($nsg) {
-
             Write-Host "Registering Microsoft.Network for network access`n"
             Register-AzResourceProvider -ProviderNamespace "Microsoft.Network" | Out-null
             
-            $subsRoleName = ""
-            if ($sid -ne "") {
-                $subsRoleName = "$NSGRoleName-$subscriptionId"
-            }
-            elseif ($tid -ne "") {
-                $subsRoleName = "$NSGRoleName-$tenantId"
-            }
-            else {
-                throw "subscription or tenant id cannot be empty"
-            }
-
-            Write-Host "Checking if $subsRoleName exists in scope $scope`n"
-            $role = Get-AzRoleDefinition -Name $subsRoleName -Scope $scope
-            if (-Not $role) {
-                # Role does not exists, hence creating a new role.
-                # Create a new role for Illumio Azure Network Security Administrator
-                Write-Host "Role $subsRolename does not exist. Creating new"
-                $actions = "Microsoft.Network/networkInterfaces/effectiveNetworkSecurityGroups/action",
-                "Microsoft.Network/networkSecurityGroups/read",
-                "Microsoft.Network/networkSecurityGroups/write",
-                "Microsoft.Network/networkSecurityGroups/delete",
-                "Microsoft.Network/networkSecurityGroups/join/action",
-                "Microsoft.Network/networkSecurityGroups/defaultSecurityRules/read",
-                "Microsoft.Network/networkSecurityGroups/securityRules/write",
-                "Microsoft.Network/networkSecurityGroups/securityRules/delete",
-                "Microsoft.Network/networksecuritygroups/providers/Microsoft.Insights/diagnosticSettings/read",
-                "Microsoft.Network/networksecuritygroups/providers/Microsoft.Insights/diagnosticSettings/write",
-                "Microsoft.Network/networksecuritygroups/providers/Microsoft.Insights/logDefinitions/read",
-                "Microsoft.Network/networkWatchers/securityGroupView/action"
-
-                $newRole = [Microsoft.Azure.Commands.Resources.Models.Authorization.PSRoleDefinition]::new()
-                $newRole.Name = $subsRoleName
-                $newRole.Description = "Illumio Network Administration Role"
-                $newRole.IsCustom = $true
-                $newRole.Actions = $actions
-                $newRole.AssignableScopes = $scope
-
-                Write-Host "Creating role '$( $newRole.Name )'`n"
-                New-AzRoleDefinition -Role $newRole | Out-null
-                Write-Host "Role creation successful '$( $newRole.Name )'`n"
-                for ($i = 0; $i -le 30; $i++) {
-                    $r = Get-AzRoleDefinition -Name $subsRoleName -WarningAction Ignore | Out-null
-                    if ($r) {
-                        break
-                    }
-                    Start-Sleep -Seconds 2
+            $roleToAssign = $DefaultNSGRoleName
+            
+            if ($nsgRoleId) {
+                $role = Get-AzRoleDefinition -Id $nsgRoleId
+                if ($role) {
+                    $roleToAssign = $role.Name
+                    Write-Host "Using custom NSG role: $($role.Name) (ID: $nsgRoleId)`n"
+                } else {
+                    Write-Host "Warning: Provided NSG role ID not found. Using default role.`n" -ForegroundColor Yellow
                 }
-            }
-            else {
-                Write-Host "$subsRoleName Already exists on the scope $scope.`n"
+            } elseif ($nsgRoleName) {
+                $role = Get-AzRoleDefinition -Name $nsgRoleName
+                if ($role) {
+                    $roleToAssign = $nsgRoleName
+                    Write-Host "Using custom NSG role: $nsgRoleName`n"
+                } else {
+                    Write-Host "Warning: Provided NSG role name not found. Using default role.`n" -ForegroundColor Yellow
+                }
+            } else {
+                Write-Host "Using default NSG role: $DefaultNSGRoleName`n"
             }
 
-            # Assign the Created Role
-            $err = Add-Role-To-Scope -scope $scope -role $subsRoleName -objId $IllumioAppId
+            Write-Host "Assigning $roleToAssign role to the app`n"
+            $err = Add-Role-To-Scope -scope $scope -role $roleToAssign -objId $IllumioAppId
             if ($err) {
                 throw $err
             }
