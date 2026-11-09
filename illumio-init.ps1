@@ -537,7 +537,7 @@ function Grant-Firewall-Access-to-App {
                 Write-Host "Creating role '$( $newRole.Name )'`n"
                 New-AzRoleDefinition -Role $newRole | Out-null
                 for ($i = 0; $i -le 30; $i++) {
-                    $r = Get-AzRoleDefinition -Name $subsRoleName -WarningAction Ignore | Out-null
+                    $r = Get-AzRoleDefinition -Name $subsRoleName -WarningAction Ignore
                     if ($r) {
                         break
                     }
@@ -684,7 +684,7 @@ function Grant-Network-Access-to-App {
                 New-AzRoleDefinition -Role $newRole | Out-null
                 Write-Host "Role creation successful '$( $newRole.Name )'`n"
                 for ($i = 0; $i -le 30; $i++) {
-                    $r = Get-AzRoleDefinition -Name $subsRoleName -WarningAction Ignore | Out-null
+                    $r = Get-AzRoleDefinition -Name $subsRoleName -WarningAction Ignore
                     if ($r) {
                         break
                     }
