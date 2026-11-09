@@ -124,10 +124,19 @@ function Confirm-User-Permission-For-Scope {
     )
     try {
         $user = Get-AzAdUser -SignedIn
-        $roles = Get-AzRoleAssignment -ObjectId $user.Id -Scope $scope
+        # -ExpandPrincipalGroups includes roles the user holds through (nested) group membership. It cannot be
+        # combined with -Scope, so it lists the assignments of the current subscription, which must be selected first.
+        $roles = Get-AzRoleAssignment -ObjectId $user.Id -ExpandPrincipalGroups -WarningAction Ignore
         $hasPermission = $false
         Write-Host "Checking if user has Owner or User Access Administrator Role on scope $scope`n"
         foreach ($r in $roles) {
+            # only assignments on the scope itself or inherited from above cover the whole scope;
+            # management groups listed for a subscription are always its parents
+            $coversScope = $r.Scope -eq $scope -or $r.Scope -eq "/" -or
+                ($scope.StartsWith("$SubscriptionScopePrefix/") -and $r.Scope.StartsWith("$TenantScopePrefix/", [StringComparison]::OrdinalIgnoreCase))
+            if (-not $coversScope) {
+                continue
+            }
             if ($r.RoleDefinitionName -eq "Owner" -or $r.RoleDefinitionName -eq "User Access Administrator") {
                 $hasPermission = $true
                 break
@@ -155,15 +164,39 @@ function Add-Role-To-Scope {
 
     try {
         #fetching role definition id
-        $roleDef = Get-AzRoleDefinition -Name $role
+        $roleDef = Get-AzRoleDefinition -Name $role -WarningAction Ignore
 
         Write-Host "Assigning role $role to the app principal $objId on scope $scope"
         New-AzRoleAssignment -ObjectId $objId -RoleDefinitionId $roleDef.Id -Scope $scope | Out-Null
     }
     catch {
+        # a conflict means the role is already assigned to the principal on this scope
+        if ($_.Exception.Message.Contains("Conflict")) {
+            Write-Host "Role $role is already assigned to $objId on scope $scope. Skipping`n" -ForegroundColor Yellow
+            return
+        }
         Write-Host "Error Occured: $_" -ForegroundColor "Red"
         return $_
     }
+}
+
+# Returns $true if the role is assigned to the principal on the scope, either directly or inherited from a parent scope
+function Test-Role-Assigned {
+    param (
+        $scope,
+        $role,
+        $objId
+    )
+
+    # the result also contains assignments on child scopes (e.g. resource groups), which do not cover the whole scope
+    $assignments = Get-AzRoleAssignment -ObjectId $objId -RoleDefinitionName $role -Scope $scope -WarningAction Ignore
+    foreach ($a in $assignments) {
+        if (-not $a.Scope.StartsWith("$scope/", [StringComparison]::OrdinalIgnoreCase)) {
+            Write-Host "Role $role is already assigned to $objId on scope $($a.Scope)`n" -ForegroundColor Yellow
+            return $true
+        }
+    }
+    return $false
 }
 
 function install-Illumio-App {
@@ -221,10 +254,12 @@ function install-Illumio-App {
             $appPrincipal = New-AzADServicePrincipal -ApplicationId $appId -Description "Illumio App Service Principal"
         }
 
-        $err = Add-Role-To-Scope -scope $scope -role $ReaderRole -objId $appPrincipal.Id
-        if ($err) {
-            Write-Host "Unable to assign $($ReaderRole) to $($appPrincipal.Id) on scope $($scope) due to err $err" -Foreground Red
-            throw $err
+        if (-not (Test-Role-Assigned -scope $scope -role $ReaderRole -objId $appPrincipal.Id)) {
+            $err = Add-Role-To-Scope -scope $scope -role $ReaderRole -objId $appPrincipal.Id
+            if ($err) {
+                Write-Host "Unable to assign $($ReaderRole) to $($appPrincipal.Id) on scope $($scope) due to err $err" -Foreground Red
+                throw $err
+            }
         }
 
         # checking and providing storage access if storage accounts are passed.
@@ -558,11 +593,6 @@ try {
         # subscription Onboarding
         $scope = "$SubscriptionScopePrefix/$subscriptionId"
         $tenantId = $orgTenantId
-        # check user permission before proceeding
-        $err = Confirm-User-Permission-For-Scope -scope $scope
-        if ($err) {
-            throw $err
-        }
 
         Write-Host "Select subscription $subscriptionId`n"
         Select-AzSubscription -SubscriptionId $subscriptionId -TenantId $orgTenantId | Out-Null
@@ -571,12 +601,6 @@ try {
         # tenant Onboarding
         $scope = "$TenantScopePrefix/$tenantId"
 
-        # check user permission before proceeding
-        $err = Confirm-User-Permission-For-Scope -scope $scope
-        if ($err) {
-            throw $err
-        }
-
         Write-Host "Select Tenant $tenantId`n"
         Set-AzContext -TenantId $tenantId | Out-Null
 
@@ -584,9 +608,18 @@ try {
     else {
         throw "subscription id or tenant id cannot be empty"
     }
+
+    # check user permission before proceeding (needs the target subscription / tenant selected)
+    $err = Confirm-User-Permission-For-Scope -scope $scope
+    if ($err) {
+        throw $err
+    }
 }
 catch {
     Write-Host "Error: $_"
+    if ($orgSubscId) {
+        Select-AzSubscription -SubscriptionId $orgSubscId -TenantId $orgTenantId -ErrorAction SilentlyContinue | Out-Null
+    }
     exit 1
 }
 
