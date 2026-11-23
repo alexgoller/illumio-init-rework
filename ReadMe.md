@@ -6,14 +6,33 @@ This PowerShell script onboards an Azure subscription or a whole Azure tenant to
 
 You do not have to run it blind: `-DryRun` shows what it would do, and `-Generate` writes the same steps as an Azure CLI or PowerShell script that you can review and run yourself (see [Preview and review before running](#preview-and-review-before-running)).
 
-## Recent Changes
+## What's new
 
-- **`-DryRun`** previews every change without making it, and **`-Generate az|ps`** writes the onboarding as a reviewable Azure CLI or PowerShell script.
-- `illumio-init-extended.ps1` was merged into `illumio-init.ps1`, which now supports `-nsgRoleId` / `-nsgRoleName`. The extended script remains as a wrapper that forwards to it.
+### New features
+
+| Feature | What it does |
+|---|---|
+| **Dry run** (`-DryRun`) | Signs in, checks your permissions and reads the current state, but makes no change. Each change is reported and a numbered summary is printed at the end. Works in every mode, including `-remove` and `-whitelistStorageAccounts`, and needs no CloudSecure credentials. |
+| **Script generation** (`-Generate az` / `-Generate ps`) | Writes the onboarding as an Azure CLI (bash) or Az PowerShell script that you can review, hand to another team or run yourself, for example in Azure Cloud Shell. Needs no Azure sign-in. Secrets are never written into the file; the generated script reads them from environment variables. |
+| **Output file** (`-OutFile`) | Saves the generated script to a file instead of printing it. |
+| **One script** | `illumio-init-extended.ps1` is merged into `illumio-init.ps1`. The extended script remains as a wrapper that forwards to it, so existing instructions keep working. |
+| **Existing NSG role** (`-nsgRoleId` / `-nsgRoleName`) | Assigns a role you already have instead of creating the custom NSG role. Useful when you may not create custom roles. |
+| **Existing app registration** (`-existingAppId` / `-existingAppSecret`) | Uses an app registration and service principal that were created manually instead of creating new ones. |
+| **Tests** | `tests/run-tests.ps1` checks the script, the dry run and both generated scripts without Azure access. |
+
+See [Preview and review before running](#preview-and-review-before-running) for the dry run and script generation, and [Parameters](#parameters) for every switch.
+
+### Changed behaviour
+
 - `-azfw` now assigns the firewall role for a new app too. Before, it did so only together with `-nsg` or `-clientId`.
-- An existing role assignment is detected before assigning, for every role, including inherited assignments.
+- An unknown `-nsgRoleId` / `-nsgRoleName` is an error. Before, the extended script fell back to a default role name and failed later.
+- `-Generate` covers onboarding, adding permissions and secret rotation. It does not cover `-remove` or `-whitelistStorageAccounts`; preview those with `-DryRun`.
+
+### Fixes
+
+- An existing role assignment, including an inherited one, is detected before assigning. This removes the `Conflict` error when Reader was already assigned.
 - The permission check recognises **Owner** / **User Access Administrator** granted through (nested) **group membership**, not only direct assignments.
-- Added support for using an existing Azure AD application instead of creating a new one.
+- After creating a custom role, the script continues as soon as the role is available instead of always waiting the full minute.
 
 ## Scripts
 
