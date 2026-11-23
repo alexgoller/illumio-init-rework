@@ -380,8 +380,8 @@ flowchart TD
     P -- "PS too old" --> X1
     P -- yes --> L{"Az context<br/>present?"}
     L -- no --> LA["Connect-AzAccount<br/>(device code login)"] --> N
-    L -- yes --> N["App name = -name<br/>or 'Illumio-CloudSecure-Access'"]
-    N --> V{"serviceAccountKey, serviceAccountToken,<br/>csTenantId and url set?<br/>(not needed for -DryRun)"}
+    L -- yes --> N["App name = ‑name<br/>or 'Illumio-CloudSecure-Access'"]
+    N --> V{"serviceAccountKey, serviceAccountToken,<br/>csTenantId and url set?<br/>(not needed for ‑DryRun)"}
     V -- no --> X2([Exit 1])
     V -- yes --> S{"-sid or -tid?"}
     S -- "-sid" --> SS["scope = /subscriptions/&lt;sid&gt;<br/>select subscription"]
@@ -396,18 +396,18 @@ flowchart TD
     R1 --> R2["... and remove 'Illumio Firewall Administrator-&lt;sub&gt;'<br/>assignments + role definition"]
     R2 --> R3["Delete App Registrations named &lt;app name&gt;"] --> E
 
-    M -- "-whitelistStorageAccounts" --> W1{"-storageAccounts given?"}
+    M -- "-whitelistStorageAccounts" --> W1{"‑storageAccounts given?"}
     W1 -- no --> E
     W1 -- yes --> W2["Download dataplane IP metadata"]
     W2 --> W3["Per storage account: look up region,<br/>map to dataplane IP group"]
     W3 --> W4["Add missing IPs as Allow rules<br/>to storage account firewall"] --> E
 
-    M -- "-clientId + -rotateSecret" --> RS1["Create new client secret<br/>(-secretExpirationDays)"]
+    M -- "-clientId + -rotateSecret" --> RS1["Create new client secret<br/>(‑secretExpirationDays)"]
     RS1 --> RS2["POST credentials to CloudSecure"] --> E
 
     M -- "-clientId" --> C1{"Service Principal for<br/>clientId exists?"}
     C1 -- no --> X3([Error])
-    C1 -- yes --> CST{"-storageAccounts?"}
+    C1 -- yes --> CST{"‑storageAccounts?"}
     CST -- yes --> GS
     CST -- no --> CN
     GS["Grant storage access"] --> CN{"-nsg?"}
@@ -420,16 +420,16 @@ flowchart TD
     I1 -- yes --> FAIL
     I1 -- no --> I2{"-azfw?"}
     I2 -- yes --> I3["Register AFW features<br/>AFWEnableNetworkRuleNameLogging,<br/>AFWEnableStructuredLogs<br/>+ Microsoft.Network provider"] --> I4
-    I2 -- no --> I4{"-existingAppId AND<br/>-existingAppSecret?"}
+    I2 -- no --> I4{"‑existingAppId AND<br/>‑existingAppSecret?"}
     I4 -- yes --> I5{"Service Principal<br/>exists?"}
     I5 -- no --> FAIL
     I5 -- yes --> RC
-    I4 -- no --> I6["Create App Registration<br/>+ client secret (-secretExpirationDays)"]
+    I4 -- no --> I6["Create App Registration<br/>+ client secret (‑secretExpirationDays)"]
     I6 --> I7["Create Service Principal"] --> RC
     RC{"Reader already assigned<br/>on scope or above?"}
     RC -- yes --> I9
     RC -- no --> I8["Assign 'Reader' on scope"]
-    I8 --> I9{"-storageAccounts?"}
+    I8 --> I9{"‑storageAccounts?"}
     I9 -- yes --> I10["Grant storage access"] --> I11
     I9 -- no --> I11{"-nsg?"}
     I11 -- yes --> I12["Grant NSG role"] --> I13["Grant Firewall role"] --> I14
